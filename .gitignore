@@ -1,0 +1,10 @@
+# Executables & Build files
+*.exe
+*.out
+MultiverseSim
+build/
+
+# IDE & System Files
+.vscode/
+.idea/
+.DS_Store
