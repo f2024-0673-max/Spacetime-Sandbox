@@ -1,0 +1,1090 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spacetime Sandbox — N-Body Physics Engine</title>
+<meta name="description" content="Interactive N-Body anti-gravity physics simulation using the Strategy design pattern, built with Matter.js and ES6 classes.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   SPACETIME SANDBOX — DESIGN SYSTEM
+   Neon cyberpunk deep-space aesthetic
+   ============================================================ */
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --void:#06060f;--panel:rgba(8,12,30,.72);--border:rgba(0,200,255,.1);
+  --glow:rgba(0,200,255,.05);--accent:#00e0ff;--accent-d:rgba(0,224,255,.15);
+  --accent-rgb:0,224,255;--text:#d0daf0;--dim:rgba(180,200,230,.45);
+  --danger:#ff3535;--gold:#ffbb00;--violet:#a855f7;--magenta:#ff2d8a;
+}
+html,body{width:100%;height:100%;overflow:hidden}
+body{background:var(--void);color:var(--text);font-family:'Rajdhani',sans-serif;cursor:crosshair;transition:filter .5s}
+
+/* --- Canvas --- */
+#c{position:fixed;inset:0;width:100%;height:100%;z-index:1;display:block;
+  transition:transform .8s cubic-bezier(.22,1,.36,1),filter .8s}
+body.ag #c{transform:perspective(800px) rotateX(1.8deg) scale(1.012);filter:saturate(1.25)}
+
+/* --- Overlays --- */
+#flash{position:fixed;inset:0;z-index:100;pointer-events:none;background:#fff;opacity:0}
+#flash.fire{animation:fl .7s ease-out forwards}
+@keyframes fl{0%{opacity:.9}100%{opacity:0}}
+body.shake{animation:sk .45s ease-out}
+@keyframes sk{
+  0%,100%{transform:translate(0)}10%{transform:translate(-5px,-3px)}
+  20%{transform:translate(4px,5px)}30%{transform:translate(-3px,-2px)}
+  40%{transform:translate(5px,3px)}50%{transform:translate(-2px,4px)}
+  60%{transform:translate(3px,-3px)}70%{transform:translate(-4px,2px)}
+  80%{transform:translate(2px,-4px)}90%{transform:translate(-3px,3px)}
+}
+
+/* --- Sidebar --- */
+#sb{position:fixed;top:50%;left:16px;transform:translateY(-50%);z-index:20;
+  width:244px;padding:16px 14px;border-radius:14px;background:var(--panel);
+  border:1px solid var(--border);backdrop-filter:blur(22px) saturate(1.4);
+  -webkit-backdrop-filter:blur(22px) saturate(1.4);
+  box-shadow:0 0 40px var(--glow),inset 0 0 40px var(--glow),0 8px 30px rgba(0,0,0,.5);
+  display:flex;flex-direction:column;gap:11px;max-height:92vh;overflow-y:auto;
+  transition:border-color .6s,box-shadow .6s}
+#sb::before{content:'';position:absolute;inset:-1px;border-radius:inherit;padding:1px;
+  background:linear-gradient(135deg,rgba(0,200,255,.22),transparent 40%,transparent 60%,rgba(139,92,246,.16));
+  -webkit-mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);
+  mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);
+  -webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none}
+
+.shdr{text-align:center;padding-bottom:9px;border-bottom:1px solid rgba(0,200,255,.07)}
+.shdr h2{font-family:'Orbitron',monospace;font-weight:900;font-size:1.05rem;letter-spacing:.12em;
+  background:linear-gradient(135deg,var(--accent),var(--violet));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  filter:drop-shadow(0 0 12px var(--accent-d));line-height:1.35}
+.badge{display:inline-block;margin-top:5px;padding:2px 10px;border-radius:20px;
+  font-family:'Orbitron',monospace;font-size:.45rem;font-weight:700;letter-spacing:.1em;
+  background:var(--accent-d);color:var(--accent);border:1px solid rgba(0,200,255,.2);
+  transition:all .4s}
+
+/* --- Sections --- */
+.sec{display:flex;flex-direction:column;gap:5px}
+.stl{font-family:'Orbitron',monospace;font-size:.48rem;font-weight:400;
+  letter-spacing:.12em;color:var(--dim);text-transform:uppercase}
+
+/* --- Engine Selector --- */
+.esel{display:flex;gap:3px}
+.ebtn{flex:1;padding:6px 2px;background:rgba(255,255,255,.03);
+  border:1px solid var(--border);border-radius:6px;color:var(--dim);
+  font-family:'Orbitron',monospace;font-size:.42rem;font-weight:600;
+  letter-spacing:.04em;cursor:pointer;transition:all .3s;text-align:center;outline:none}
+.ebtn:hover{border-color:var(--accent);color:var(--text)}
+.ebtn.on{background:var(--accent-d);color:var(--accent);border-color:var(--accent);
+  box-shadow:0 0 12px var(--accent-d)}
+
+/* --- Ctrl Buttons --- */
+.bstk{display:flex;flex-direction:column;gap:4px}
+.cb{display:flex;align-items:center;gap:7px;width:100%;padding:7px 10px;
+  background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:7px;
+  color:var(--text);font-family:'Rajdhani',sans-serif;font-size:.76rem;font-weight:600;
+  cursor:pointer;transition:all .25s cubic-bezier(.22,1,.36,1);outline:none}
+.cb .i{font-size:.85rem;width:18px;text-align:center;flex-shrink:0}
+.cb:hover{background:var(--accent-d);border-color:var(--accent);transform:translateX(3px)}
+.cb.on{background:var(--accent-d);border-color:var(--accent)}
+.cb.ba{color:var(--accent);border-color:rgba(0,200,255,.15)}
+.cb.bg{color:var(--gold);border-color:rgba(255,187,0,.15)}
+.cb.bv{color:var(--violet);border-color:rgba(168,85,247,.15)}
+.cb.bd{color:var(--danger);border-color:rgba(255,53,53,.15);
+  font-family:'Orbitron',monospace;font-size:.55rem;letter-spacing:.06em}
+.cb.bd:hover{background:rgba(255,53,53,.08);border-color:var(--danger)}
+
+/* --- Spawn Grid --- */
+.sgrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px}
+.sgrid .cb{flex-direction:column;gap:2px;padding:7px 3px;font-size:.58rem;text-align:center;justify-content:center}
+.sgrid .i{font-size:1.05rem;width:auto}
+
+/* --- Slider --- */
+.prow{display:flex;flex-direction:column;gap:3px}
+.prow label{font-size:.62rem;color:var(--dim)}
+.slr{display:flex;align-items:center;gap:8px}
+.gr{-webkit-appearance:none;appearance:none;flex:1;height:3px;
+  background:rgba(255,255,255,.07);border-radius:2px;outline:none;cursor:pointer}
+.gr::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;
+  background:var(--accent);border:2px solid rgba(0,0,0,.3);
+  box-shadow:0 0 10px var(--accent-d);cursor:pointer;transition:transform .2s}
+.gr::-webkit-slider-thumb:hover{transform:scale(1.3)}
+.gr::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:var(--accent);
+  border:2px solid rgba(0,0,0,.3);box-shadow:0 0 10px var(--accent-d)}
+.rv{font-family:'Orbitron',monospace;font-size:.52rem;font-weight:700;
+  color:var(--accent);min-width:28px;text-align:right;transition:color .4s}
+
+/* --- Stats --- */
+.sbar{display:grid;grid-template-columns:1fr 1fr;gap:5px;
+  padding-top:9px;border-top:1px solid rgba(0,200,255,.06)}
+.si{display:flex;flex-direction:column;align-items:center;gap:1px}
+.sk{font-size:.48rem;color:var(--dim);letter-spacing:.06em}
+.sv{font-family:'Orbitron',monospace;font-size:.58rem;font-weight:700;color:var(--accent);transition:color .4s}
+
+/* --- Console --- */
+#clog{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);z-index:30;
+  display:flex;flex-direction:column;align-items:center;gap:3px;pointer-events:none;max-width:650px}
+.lm{padding:3px 14px;border-radius:4px;background:rgba(5,10,25,.72);
+  border:1px solid rgba(0,200,255,.12);backdrop-filter:blur(6px);
+  color:rgba(0,220,255,.78);font-size:.68rem;letter-spacing:.03em;white-space:nowrap;transition:opacity .8s}
+.lm.fade{opacity:0}
+
+/* --- Anti-Gravity Mode --- */
+body.ag{--accent:#ff6b35;--accent-d:rgba(255,107,53,.15);--accent-rgb:255,107,53;
+  --border:rgba(255,107,53,.1);--glow:rgba(255,107,53,.05)}
+body.ag .badge{background:rgba(255,45,138,.2);color:var(--magenta);
+  border-color:rgba(255,45,138,.3);animation:bp 1.5s ease-in-out infinite}
+@keyframes bp{0%,100%{box-shadow:0 0 8px rgba(255,45,138,.3)}50%{box-shadow:0 0 20px rgba(255,45,138,.6)}}
+body.ag .lm{color:rgba(255,150,100,.8);border-color:rgba(255,107,53,.15)}
+body.ag #sb::before{background:linear-gradient(135deg,rgba(255,107,53,.25),transparent 40%,transparent 60%,rgba(255,45,138,.2))}
+
+/* --- Focus --- */
+.cb:focus-visible,.ebtn:focus-visible,.gr:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+/* --- Scrollbar --- */
+#sb::-webkit-scrollbar{width:3px}
+#sb::-webkit-scrollbar-track{background:transparent}
+#sb::-webkit-scrollbar-thumb{background:var(--accent-d);border-radius:2px}
+
+/* --- Responsive --- */
+@media(max-width:700px){
+  #sb{top:auto;bottom:10px;left:8px;right:8px;transform:none;width:auto;max-height:50vh;
+    flex-direction:row;flex-wrap:wrap;gap:8px;padding:10px}
+  .shdr{width:100%}
+  .sec{min-width:120px;flex:1}
+}
+</style>
+</head>
+<body>
+
+<!-- ======= CANVAS ======= -->
+<canvas id="c"></canvas>
+<div id="flash"></div>
+
+<!-- ======= SIDEBAR ======= -->
+<aside id="sb">
+  <div class="shdr">
+    <h2>SPACETIME<br>SANDBOX</h2>
+    <div class="badge" id="badge">NEWTONIAN GRAVITY</div>
+  </div>
+
+  <div class="sec">
+    <div class="stl">Physics Engine</div>
+    <div class="esel">
+      <button class="ebtn on" data-e="gravity">Newton</button>
+      <button class="ebtn" data-e="stable">Stable</button>
+      <button class="ebtn" data-e="antigravity">Anti-G</button>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="stl">Simulation</div>
+    <div class="bstk">
+      <button class="cb" id="b-disp"><span class="i">◉</span>Display Universe</button>
+      <button class="cb" id="b-step"><span class="i">▶</span>Simulate One Step</button>
+      <button class="cb on" id="b-run"><span class="i">⏸</span>Pause</button>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="stl">Spawn Bodies</div>
+    <div class="sgrid">
+      <button class="cb ba" id="b-pl"><span class="i">⊕</span>Planet</button>
+      <button class="cb bg" id="b-st"><span class="i">✦</span>Star</button>
+      <button class="cb bv" id="b-bh"><span class="i">◉</span>Void</button>
+    </div>
+  </div>
+
+  <div class="sec">
+    <button class="cb bd" id="b-nova"><span class="i">⚡</span>TRIGGER SUPERNOVA</button>
+  </div>
+
+  <div class="sec">
+    <div class="stl">Parameters</div>
+    <div class="prow">
+      <label>Gravity Constant (G)</label>
+      <div class="slr">
+        <input type="range" id="sl-g" class="gr" min="5" max="100" value="50">
+        <span class="rv" id="v-g">0.50</span>
+      </div>
+    </div>
+    <div class="prow">
+      <label>Time Scale</label>
+      <div class="slr">
+        <input type="range" id="sl-t" class="gr" min="10" max="200" value="100">
+        <span class="rv" id="v-t">1.0x</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="sbar">
+    <div class="si"><span class="sk">BODIES</span><span class="sv" id="s-b">2</span></div>
+    <div class="si"><span class="sk">FPS</span><span class="sv" id="s-f">60</span></div>
+    <div class="si"><span class="sk">ENGINE</span><span class="sv" id="s-e">NEWTON</span></div>
+    <div class="si"><span class="sk">STEPS</span><span class="sv" id="s-s">0</span></div>
+  </div>
+</aside>
+
+<!-- ======= CONSOLE LOG ======= -->
+<div id="clog"></div>
+
+<!-- ======= SCRIPTS ======= -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.20.0/matter.min.js"></script>
+<script>
+'use strict';
+
+// Matter.js aliases
+const { Engine, Composite, Bodies, Body } = Matter;
+
+// ==========================================
+// 1. STRATEGY PATTERN: PHYSICS ENGINE
+//    Maps to C++ IPhysicsEngine interface
+// ==========================================
+
+class IPhysicsEngine {
+  /** @param {CelestialBody[]} bodies */
+  applyPhysics(bodies) {
+    throw new Error('IPhysicsEngine.applyPhysics() is abstract.');
+  }
+  getEngineName() {
+    throw new Error('IPhysicsEngine.getEngineName() is abstract.');
+  }
+}
+
+// --- Concrete Strategy: Stable (Linear) ---
+// Maps to C++ StablePhysics — no inter-body forces.
+// Matter.js handles position += velocity each step.
+class StablePhysics extends IPhysicsEngine {
+  applyPhysics(_bodies) {
+    // No inter-body forces applied.
+    // Bodies continue on their current velocity vectors.
+  }
+  getEngineName() { return 'Stable (Linear)'; }
+}
+
+// --- Concrete Strategy: Newtonian Gravity ---
+// Maps to C++ GravityPhysics — real N-body attraction.
+class GravityPhysics extends IPhysicsEngine {
+  constructor(G = 0.5) { super(); this.G = G; }
+
+  applyPhysics(bodies) {
+    // Pass 1: Calculate gravitational acceleration for each body.
+    // Mirrors C++ two-pass: update speeds first, then move.
+    for (let i = 0; i < bodies.length; i++) {
+      let ax = 0, ay = 0;
+      for (let j = 0; j < bodies.length; j++) {
+        if (i === j) continue;
+        const dx = bodies[j].x - bodies[i].x;
+        const dy = bodies[j].y - bodies[i].y;
+        let dSq = dx * dx + dy * dy;
+        if (dSq < 100) dSq = 100;            // C++: if (dSq < 1) dSq = 1
+        const d = Math.sqrt(dSq);
+        const pull = (this.G * bodies[j].mass) / dSq;
+        ax += pull * (dx / d);
+        ay += pull * (dy / d);
+      }
+      // Update velocity (mirrors C++ setPhysicsState speed update)
+      const v = bodies[i].mBody.velocity;
+      Body.setVelocity(bodies[i].mBody, { x: v.x + ax, y: v.y + ay });
+    }
+    // Pass 2: Matter.js Engine.update() handles position += velocity.
+  }
+  getEngineName() { return 'Newtonian Gravity'; }
+}
+
+// --- Concrete Strategy: Anti-Gravity ---
+// Creative addition — inverted N-body forces.
+class AntiGravityPhysics extends IPhysicsEngine {
+  constructor(G = 0.5) { super(); this.G = G; }
+
+  applyPhysics(bodies) {
+    for (let i = 0; i < bodies.length; i++) {
+      let ax = 0, ay = 0;
+      for (let j = 0; j < bodies.length; j++) {
+        if (i === j) continue;
+        const dx = bodies[j].x - bodies[i].x;
+        const dy = bodies[j].y - bodies[i].y;
+        let dSq = dx * dx + dy * dy;
+        if (dSq < 100) dSq = 100;
+        const d = Math.sqrt(dSq);
+        const pull = (this.G * bodies[j].mass) / dSq;
+        // INVERTED — repel instead of attract
+        ax -= pull * (dx / d);
+        ay -= pull * (dy / d);
+      }
+      const v = bodies[i].mBody.velocity;
+      Body.setVelocity(bodies[i].mBody, { x: v.x + ax, y: v.y + ay });
+    }
+  }
+  getEngineName() { return 'Anti-Gravity'; }
+}
+
+// ==========================================
+// 2. BASE CLASS: CELESTIALBODY
+//    Maps to C++ CelestialBody
+// ==========================================
+
+class CelestialBody {
+  constructor(name, x, y, speedX, speedY, mass) {
+    this.name = name;
+    this._mass = mass;
+    this.radius = this._calcRadius();
+    this.trail = [];
+    this.maxTrail = 65;
+
+    // Create a Matter.js physics body
+    this.mBody = Bodies.circle(x, y, this.radius, {
+      restitution: 0.7, friction: 0, frictionAir: 0,
+      density: (mass / (Math.PI * this.radius * this.radius)) * 0.0008,
+      collisionFilter: { category: 0x0001, mask: 0x0001 | 0x0002 },
+    });
+    Body.setVelocity(this.mBody, { x: speedX, y: speedY });
+  }
+
+  _calcRadius() { return Math.min(24, Math.max(5, 4 + this._mass * 0.04)); }
+
+  // --- Getters (mirror C++ getX, getY, getSpeedX, etc.) ---
+  get x()      { return this.mBody.position.x; }
+  get y()      { return this.mBody.position.y; }
+  get speedX() { return this.mBody.velocity.x; }
+  get speedY() { return this.mBody.velocity.y; }
+  get mass()   { return this._mass; }
+  get speed()  { return Math.sqrt(this.speedX ** 2 + this.speedY ** 2); }
+
+  getType()    { return 'body'; }
+  trailRGB()   { return '100, 200, 255'; }
+
+  updateTrail() {
+    this.trail.push({ x: this.x, y: this.y });
+    if (this.trail.length > this.maxTrail) this.trail.shift();
+  }
+
+  renderTrail(ctx) {
+    const rgb = this.trailRGB();
+    for (let i = 0; i < this.trail.length; i++) {
+      const t = i / this.trail.length;
+      ctx.beginPath();
+      ctx.arc(this.trail[i].x, this.trail[i].y, Math.max(.4, t * this.radius * .38), 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(${rgb},${t * .3})`;
+      ctx.fill();
+    }
+  }
+
+  render(ctx, time) { /* override */ }
+
+  // Maps to C++ getDetails()
+  getDetails() {
+    return `${this.name} | Mass: ${this._mass.toFixed(1)} | Pos: (${this.x.toFixed(1)}, ${this.y.toFixed(1)}) | Speed: (${this.speedX.toFixed(2)}, ${this.speedY.toFixed(2)})`;
+  }
+}
+
+// ==========================================
+// 3. DERIVED CLASSES
+//    Maps to C++ Planet, Star, BlackHole
+// ==========================================
+
+class Planet extends CelestialBody {
+  constructor(name, x, y, sx, sy, mass, atmosphere) {
+    super(name, x, y, sx, sy, mass);
+    this.atmosphere = atmosphere;
+    this.hue = Math.floor(Math.random() * 360);
+    this.hasRing = Math.random() > .55;
+    this.ringTilt = .2 + Math.random() * .4;
+  }
+
+  getType() { return 'planet'; }
+
+  trailRGB() {
+    // Approximate HSL→RGB for canvas trail
+    const h = this.hue / 60, i = Math.floor(h) % 6, f = h - Math.floor(h);
+    const v = 200, q = Math.round(v * (1 - f * .4)), t = Math.round(v * (1 - (1 - f) * .4)), p = Math.round(v * .6);
+    const map = [[v,t,p],[q,v,p],[p,v,t],[p,q,v],[t,p,v],[v,p,q]];
+    return map[i].join(', ');
+  }
+
+  render(ctx) {
+    ctx.save();
+    // Atmosphere glow
+    const g = ctx.createRadialGradient(this.x, this.y, this.radius * .3, this.x, this.y, this.radius * 2.5);
+    g.addColorStop(0, `hsla(${this.hue},70%,55%,.18)`);
+    g.addColorStop(1, `hsla(${this.hue},70%,55%,0)`);
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.radius * 2.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Planet sphere (lit top-left)
+    const s = ctx.createRadialGradient(this.x - this.radius * .25, this.y - this.radius * .25, 0, this.x, this.y, this.radius);
+    s.addColorStop(0, `hsl(${this.hue},45%,72%)`);
+    s.addColorStop(.5, `hsl(${this.hue},60%,42%)`);
+    s.addColorStop(1, `hsl(${this.hue},75%,16%)`);
+    ctx.fillStyle = s;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Optional ring
+    if (this.hasRing) {
+      ctx.strokeStyle = `hsla(${this.hue + 30},35%,65%,.35)`;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.ellipse(this.x, this.y, this.radius * 1.7, this.radius * .3, this.ringTilt, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  getDetails() { return `[Planet] ${super.getDetails()} | Atmos: ${this.atmosphere}`; }
+}
+
+class Star extends CelestialBody {
+  constructor(name, x, y, sx, sy, mass, brightness) {
+    super(name, x, y, sx, sy, mass);
+    this.brightness = brightness;
+    this.phase = Math.random() * Math.PI * 2;
+  }
+
+  _calcRadius() { return Math.min(34, Math.max(12, 10 + this._mass * .005)); }
+  getType() { return 'star'; }
+  trailRGB() { return '255, 200, 60'; }
+
+  renderTrail(ctx) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < this.trail.length; i++) {
+      const t = i / this.trail.length;
+      ctx.beginPath();
+      ctx.arc(this.trail[i].x, this.trail[i].y, Math.max(.4, t * this.radius * .45), 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(255,200,60,${t * .13})`;
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  render(ctx, time) {
+    const pulse = 1 + .1 * Math.sin(time * .003 + this.phase);
+    const r = this.radius * pulse;
+    ctx.save();
+
+    // Corona
+    const co = ctx.createRadialGradient(this.x, this.y, r * .2, this.x, this.y, r * 4.5);
+    co.addColorStop(0, 'rgba(255,230,120,.28)');
+    co.addColorStop(.35, 'rgba(255,160,50,.06)');
+    co.addColorStop(1, 'rgba(255,100,0,0)');
+    ctx.fillStyle = co;
+    ctx.beginPath(); ctx.arc(this.x, this.y, r * 4.5, 0, Math.PI * 2); ctx.fill();
+
+    // Body
+    const bg = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, r);
+    bg.addColorStop(0, '#fffff0');
+    bg.addColorStop(.2, '#fff7d0');
+    bg.addColorStop(.65, '#ffbb33');
+    bg.addColorStop(1, '#ff8800');
+    ctx.fillStyle = bg;
+    ctx.beginPath(); ctx.arc(this.x, this.y, r, 0, Math.PI * 2); ctx.fill();
+
+    // Cross flares
+    ctx.globalAlpha = .14 * pulse;
+    ctx.strokeStyle = '#ffe580';
+    ctx.lineWidth = 1.2;
+    for (let i = 0; i < 4; i++) {
+      const a = i * Math.PI / 4 + time * .0004;
+      ctx.beginPath();
+      ctx.moveTo(this.x + Math.cos(a) * r * .5, this.y + Math.sin(a) * r * .5);
+      ctx.lineTo(this.x + Math.cos(a) * r * 3.5, this.y + Math.sin(a) * r * 3.5);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
+  getDetails() { return `[Star] ${super.getDetails()} | Brightness: ${this.brightness}`; }
+}
+
+class BlackHole extends CelestialBody {
+  constructor(name, x, y, sx, sy, mass, pullPower) {
+    super(name, x, y, sx, sy, mass);
+    this.pullPower = pullPower;
+  }
+
+  _calcRadius() { return Math.min(24, Math.max(8, 7 + this._mass * .006)); }
+  getType() { return 'blackhole'; }
+  trailRGB() { return '150, 50, 255'; }
+
+  render(ctx, time) {
+    ctx.save();
+    // Accretion disk
+    for (let ring = 0; ring < 4; ring++) {
+      const rr = this.radius * (1.6 + ring * .6);
+      const rot = time * .002 * (ring % 2 === 0 ? 1 : -1);
+      ctx.beginPath();
+      ctx.ellipse(this.x, this.y, rr, rr * .22, rot + ring * .5, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(170,60,255,${.3 - ring * .06})`;
+      ctx.lineWidth = 2.2 - ring * .4;
+      ctx.stroke();
+    }
+    // Halo
+    const h = ctx.createRadialGradient(this.x, this.y, this.radius * .2, this.x, this.y, this.radius * 2);
+    h.addColorStop(0, 'rgba(0,0,0,.95)');
+    h.addColorStop(.5, 'rgba(20,0,50,.45)');
+    h.addColorStop(1, 'rgba(80,0,180,0)');
+    ctx.fillStyle = h;
+    ctx.beginPath(); ctx.arc(this.x, this.y, this.radius * 2, 0, Math.PI * 2); ctx.fill();
+    // Core
+    ctx.fillStyle = '#020008';
+    ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.fill();
+    // Edge glow
+    ctx.shadowColor = '#9b30ff'; ctx.shadowBlur = 22;
+    ctx.strokeStyle = 'rgba(130,40,255,.5)'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.restore();
+  }
+
+  getDetails() { return `[Black Hole] ${super.getDetails()} | Pull Power: ${this.pullPower}`; }
+}
+
+// ==========================================
+// 4. PARTICLE SYSTEM
+// ==========================================
+
+class ParticleSystem {
+  constructor() { this.particles = []; }
+
+  emit(x, y, rgb, count, speed, opts = {}) {
+    for (let i = 0; i < count; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const v = speed * (.3 + Math.random() * .7);
+      this.particles.push({
+        x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v,
+        life: 1, decay: opts.decay || (.006 + Math.random() * .014),
+        size: opts.size || (1.5 + Math.random() * 2.5), rgb
+      });
+    }
+    if (this.particles.length > 1400)
+      this.particles.splice(0, this.particles.length - 1400);
+  }
+
+  update() {
+    for (let i = this.particles.length - 1; i >= 0; i--) {
+      const p = this.particles[i];
+      p.x += p.vx; p.y += p.vy;
+      p.vx *= .97; p.vy *= .97;
+      p.life -= p.decay;
+      if (p.life <= 0) this.particles.splice(i, 1);
+    }
+  }
+
+  render(ctx) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (const p of this.particles) {
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size * Math.max(.15, p.life), 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(${p.rgb},${Math.max(0, p.life) * .5})`;
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+}
+
+// ==========================================
+// 5. MANAGEMENT CLASS: UNIVERSE
+//    Maps to C++ Universe
+// ==========================================
+
+class Universe {
+  constructor(physicsEngine) {
+    this.physicsEngine = physicsEngine;    // Strategy reference
+    this.bodies = [];                       // vector<unique_ptr<CelestialBody>>
+    this.stepCount = 0;
+  }
+
+  addBody(body) { this.bodies.push(body); }
+
+  simulate() {
+    if (this.bodies.length === 0) return;
+    this.physicsEngine.applyPhysics(this.bodies);
+    // Speed clamping (prevent runaway after close encounters)
+    const maxSpd = 9;
+    for (const b of this.bodies) {
+      const s = b.speed;
+      if (s > maxSpd) Body.setVelocity(b.mBody, { x: (b.speedX / s) * maxSpd, y: (b.speedY / s) * maxSpd });
+    }
+    this.stepCount++;
+  }
+
+  setPhysicsEngine(engine) { this.physicsEngine = engine; }
+
+  triggerSupernova() { this.bodies = []; }
+
+  display() { return this.bodies.map(b => b.getDetails()); }
+}
+
+// ==========================================
+// 6. APP: Main Orchestrator
+// ==========================================
+
+class App {
+  constructor() {
+    this.canvas = document.getElementById('c');
+    this.ctx = this.canvas.getContext('2d');
+
+    // Matter.js engine — world gravity OFF, custom engines handle forces
+    this.mEng = Engine.create({ gravity: { x: 0, y: 0 } });
+
+    // Strategy Pattern: concrete physics engines
+    this.engines = {
+      gravity:      new GravityPhysics(0.5),
+      stable:       new StablePhysics(),
+      antigravity:  new AntiGravityPhysics(0.5),
+    };
+
+    // Universe manager
+    this.universe = new Universe(this.engines.gravity);
+    this.particles = new ParticleSystem();
+
+    // State
+    this.running = true;
+    this.stepReq = false;
+    this.showData = false;
+    this.curEngine = 'gravity';
+    this.isAG = false;
+    this.mouseX = 0; this.mouseY = 0;
+    this.mouseDown = false;
+    this.timeScale = 1;
+
+    // Background stars (pre-generated)
+    this.bgStars = [];
+
+    // Walls
+    this.walls = [];
+
+    // FPS tracking
+    this._ft = 0; this._ff = 0; this._lt = 0;
+
+    this._init();
+  }
+
+  async _init() {
+    this._resize();
+    window.addEventListener('resize', () => this._resize());
+    this._genStars();
+    this._makeWalls();
+    await document.fonts.ready;
+
+    // Seed initial bodies — mirrors C++ main()
+    const cx = this.canvas.width / 2, cy = this.canvas.height / 2;
+    this._add(new Star('Sol', cx, cy, 0, 0, 2000, 100));
+    // Orbital velocity ≈ sqrt(G * M / r) = sqrt(0.5 * 2000 / 160) ≈ 2.5
+    this._add(new Planet('Terra', cx + 160, cy, 0, -2.5, 30, 'Oxygen'));
+
+    this._bindUI();
+    this._bindMouse();
+    this._log('System online. Engine: Newtonian Gravity.');
+    this._log('Sol (Star, m=2000) and Terra (Planet, m=30) in orbit.');
+
+    this._lt = performance.now();
+    requestAnimationFrame(t => this._loop(t));
+  }
+
+  // --- Resize ---
+  _resize() {
+    this.canvas.width = window.innerWidth;
+    this.canvas.height = window.innerHeight;
+    this._genStars();
+    if (this.walls.length) Composite.remove(this.mEng.world, this.walls);
+    this._makeWalls();
+  }
+
+  _genStars() {
+    this.bgStars = [];
+    const w = this.canvas.width, h = this.canvas.height;
+    for (let i = 0; i < 360; i++) {
+      this.bgStars.push({
+        x: Math.random() * w, y: Math.random() * h,
+        r: .3 + Math.random() * 1.5, a: .15 + Math.random() * .55,
+        rate: .4 + Math.random() * 2.5, phase: Math.random() * Math.PI * 2,
+      });
+    }
+  }
+
+  _makeWalls() {
+    const w = this.canvas.width, h = this.canvas.height, t = 50;
+    const o = { isStatic: true, restitution: .6, friction: 0, collisionFilter: { category: 0x0002, mask: 0xFFFF } };
+    this.walls = [
+      Bodies.rectangle(w / 2, -t / 2, w + t * 2, t, o),
+      Bodies.rectangle(w / 2, h + t / 2, w + t * 2, t, o),
+      Bodies.rectangle(-t / 2, h / 2, t, h + t * 2, o),
+      Bodies.rectangle(w + t / 2, h / 2, t, h + t * 2, o),
+    ];
+    Composite.add(this.mEng.world, this.walls);
+  }
+
+  // --- Add body ---
+  _add(cb) {
+    Composite.add(this.mEng.world, cb.mBody);
+    this.universe.addBody(cb);
+    this.particles.emit(cb.x, cb.y, cb.trailRGB(), 22, 5);
+    this._stat();
+  }
+
+  // --- UI Binding ---
+  _bindUI() {
+    // Engine selector
+    document.querySelectorAll('.ebtn').forEach(b => {
+      b.addEventListener('click', () => this._switchEngine(b.dataset.e));
+    });
+    // Display Universe
+    document.getElementById('b-disp').addEventListener('click', () => {
+      this.showData = !this.showData;
+      document.getElementById('b-disp').classList.toggle('on', this.showData);
+      if (this.showData && this.universe.bodies.length) {
+        this._log(`═══ Universe: ${this.universe.bodies.length} bodies ═══`);
+        this.universe.bodies.forEach(b => this._log(b.getDetails()));
+      } else if (!this.showData) this._log('Data overlay off.');
+    });
+    // Step
+    document.getElementById('b-step').addEventListener('click', () => {
+      this.stepReq = true;
+    });
+    // Run/Pause
+    document.getElementById('b-run').addEventListener('click', () => {
+      this.running = !this.running;
+      const el = document.getElementById('b-run');
+      el.innerHTML = this.running ? '<span class="i">⏸</span>Pause' : '<span class="i">▶</span>Run Continuous';
+      el.classList.toggle('on', this.running);
+      this._log(this.running ? 'Simulation resumed.' : 'Simulation paused.');
+    });
+    // Spawn
+    document.getElementById('b-pl').addEventListener('click', () => this._spawn('planet'));
+    document.getElementById('b-st').addEventListener('click', () => this._spawn('star'));
+    document.getElementById('b-bh').addEventListener('click', () => this._spawn('blackhole'));
+    // Supernova
+    document.getElementById('b-nova').addEventListener('click', () => this._supernova());
+    // Gravity slider
+    document.getElementById('sl-g').addEventListener('input', e => {
+      const G = e.target.value / 100;
+      document.getElementById('v-g').textContent = G.toFixed(2);
+      this.engines.gravity.G = G;
+      this.engines.antigravity.G = G;
+    });
+    // Time scale slider
+    document.getElementById('sl-t').addEventListener('input', e => {
+      this.timeScale = e.target.value / 100;
+      document.getElementById('v-t').textContent = this.timeScale.toFixed(1) + 'x';
+    });
+  }
+
+  _bindMouse() {
+    const c = this.canvas;
+    c.addEventListener('mousemove', e => { this.mouseX = e.clientX; this.mouseY = e.clientY; });
+    c.addEventListener('mousedown', e => { if (e.button === 0) this.mouseDown = true; });
+    c.addEventListener('mouseup', () => { this.mouseDown = false; });
+    c.addEventListener('mouseleave', () => { this.mouseDown = false; });
+    // Touch
+    c.addEventListener('touchstart', e => { const t = e.touches[0]; this.mouseX = t.clientX; this.mouseY = t.clientY; this.mouseDown = true; }, { passive: true });
+    c.addEventListener('touchmove', e => { const t = e.touches[0]; this.mouseX = t.clientX; this.mouseY = t.clientY; }, { passive: true });
+    c.addEventListener('touchend', () => { this.mouseDown = false; });
+  }
+
+  // --- Engine Swap ---
+  _switchEngine(name) {
+    if (this.curEngine === name) return;
+    const prev = this.isAG;
+    this.curEngine = name;
+    this.universe.setPhysicsEngine(this.engines[name]);
+    this.isAG = name === 'antigravity';
+
+    document.querySelectorAll('.ebtn').forEach(b => b.classList.toggle('on', b.dataset.e === name));
+    document.getElementById('badge').textContent = this.engines[name].getEngineName().toUpperCase();
+    document.getElementById('s-e').textContent = name === 'gravity' ? 'NEWTON' : name === 'stable' ? 'LINEAR' : 'ANTI-G';
+
+    if (this.isAG && !prev) {
+      document.body.classList.add('ag');
+      this._flash(); this._shake();
+      this._log('⚠ ANTI-GRAVITY ENGAGED — All forces inverted!');
+      for (const b of this.universe.bodies) {
+        Body.setVelocity(b.mBody, { x: b.speedX + (Math.random() - .5) * 3, y: b.speedY - 3 });
+        this.particles.emit(b.x, b.y, b.trailRGB(), 14, 4);
+      }
+    } else if (!this.isAG && prev) {
+      document.body.classList.remove('ag');
+      this._flash(); this._shake();
+      this._log('Gravity restored to normal.');
+    } else {
+      this._log(`Engine → ${this.engines[name].getEngineName()}.`);
+    }
+  }
+
+  // --- Spawn Random ---
+  _spawn(type) {
+    if (this.universe.bodies.length >= 30) { this._log('Max 30 bodies!'); return; }
+    const w = this.canvas.width, h = this.canvas.height;
+    const x = 280 + Math.random() * (w - 340);
+    const y = 50 + Math.random() * (h - 100);
+    const vx = (Math.random() - .5) * 4, vy = (Math.random() - .5) * 4;
+    let cb;
+    if (type === 'planet') {
+      const m = 10 + Math.random() * 200;
+      const atmos = ['Nitrogen','CO₂','Methane','Helium','Toxic','Oxygen'][Math.floor(Math.random() * 6)];
+      cb = new Planet('Rogue Planet', x, y, vx, vy, m, atmos);
+      this._log(`A rogue planet (${m.toFixed(0)}m) appeared at (${x.toFixed(0)}, ${y.toFixed(0)})!`);
+    } else if (type === 'star') {
+      const m = 500 + Math.random() * 2000;
+      cb = new Star('Nova Star', x, y, vx * .4, vy * .4, m, 50 + Math.floor(Math.random() * 100));
+      this._log(`A star (${m.toFixed(0)}m) ignited at (${x.toFixed(0)}, ${y.toFixed(0)})!`);
+    } else {
+      const m = 300 + Math.random() * 1500;
+      cb = new BlackHole('Void', x, y, vx * .25, vy * .25, m, 5 + Math.floor(Math.random() * 15));
+      this._log(`A black hole (${m.toFixed(0)}m) tore open spacetime!`);
+    }
+    this._add(cb);
+  }
+
+  // --- Supernova ---
+  _supernova() {
+    if (!this.universe.bodies.length) { this._log('The universe is empty. Nothing happens.'); return; }
+    for (const b of this.universe.bodies) {
+      this.particles.emit(b.x, b.y, b.trailRGB(), 55, 10);
+      this.particles.emit(b.x, b.y, '255,255,200', 30, 6);
+      Composite.remove(this.mEng.world, b.mBody);
+    }
+    this.universe.triggerSupernova();
+    this._flash(); this._shake();
+    this._log('*** SUPERNOVA! All celestial bodies incinerated! ***');
+    this._stat();
+  }
+
+  // --- FX ---
+  _flash() {
+    const el = document.getElementById('flash');
+    el.classList.remove('fire'); void el.offsetWidth; el.classList.add('fire');
+  }
+  _shake() {
+    document.body.classList.remove('shake'); void document.body.offsetWidth;
+    document.body.classList.add('shake');
+    setTimeout(() => document.body.classList.remove('shake'), 500);
+  }
+  _log(msg) {
+    const el = document.getElementById('clog');
+    const d = document.createElement('div');
+    d.className = 'lm'; d.textContent = msg;
+    el.appendChild(d);
+    while (el.children.length > 5) el.removeChild(el.firstChild);
+    setTimeout(() => d.classList.add('fade'), 4500);
+    setTimeout(() => { if (d.parentNode) d.remove(); }, 5500);
+  }
+  _stat() {
+    document.getElementById('s-b').textContent = this.universe.bodies.length;
+    document.getElementById('s-s').textContent = this.universe.stepCount;
+  }
+
+  // ==========================================
+  // RENDERING
+  // ==========================================
+
+  _drawStars(time) {
+    const ctx = this.ctx;
+    for (const s of this.bgStars) {
+      const tw = .5 + .5 * Math.sin(time * .001 * s.rate + s.phase);
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      ctx.fillStyle = this.isAG
+        ? `rgba(255,180,140,${s.a * tw})`
+        : `rgba(180,200,240,${s.a * tw})`;
+      ctx.fill();
+    }
+  }
+
+  _drawGrid(time) {
+    const ctx = this.ctx, w = this.canvas.width, h = this.canvas.height;
+    const sp = 55, seg = 14;
+    const bhs = this.universe.bodies.filter(b => b.getType() === 'blackhole');
+    const rgb = this.isAG ? '255,100,50' : '0,180,255';
+    const ga = this.isAG ? .05 : .032;
+    ctx.strokeStyle = `rgba(${rgb},${ga})`;
+    ctx.lineWidth = .5;
+
+    if (!bhs.length && !this.isAG) {
+      // Fast: straight lines
+      for (let x = 0; x <= w; x += sp) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke(); }
+      for (let y = 0; y <= h; y += sp) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); }
+    } else {
+      const wr = 190;
+      const drawLine = (fixed, isVert) => {
+        ctx.beginPath();
+        const max = isVert ? h : w;
+        for (let v = 0; v <= max; v += seg) {
+          let px = isVert ? fixed : v;
+          let py = isVert ? v : fixed;
+          for (const bh of bhs) {
+            const dx = px - bh.x, dy = py - bh.y;
+            const d = Math.sqrt(dx * dx + dy * dy);
+            if (d < wr && d > 1) {
+              const s = Math.pow((wr - d) / wr, 2) * 20;
+              px -= (dx / d) * s; py -= (dy / d) * s;
+            }
+          }
+          if (this.isAG) {
+            px += Math.sin(py * .025 + time * .0015) * 2.5;
+            py += Math.cos(px * .025 + time * .0012) * 2.5;
+          }
+          v === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+      };
+      for (let x = 0; x <= w; x += sp) drawLine(x, true);
+      for (let y = 0; y <= h; y += sp) drawLine(y, false);
+    }
+  }
+
+  _drawData() {
+    const ctx = this.ctx;
+    const accent = this.isAG ? '255,150,100' : '0,220,255';
+    const border = this.isAG ? '255,107,53' : '0,200,255';
+    ctx.font = '600 10px Rajdhani, sans-serif';
+    ctx.textBaseline = 'top'; ctx.textAlign = 'left';
+
+    for (const b of this.universe.bodies) {
+      const ox = b.radius + 14, oy = -(b.radius + 8);
+      const tx = b.x + ox, ty = b.y + oy;
+
+      ctx.save();
+      ctx.strokeStyle = `rgba(${border},.22)`;
+      ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+      ctx.beginPath(); ctx.moveTo(b.x, b.y); ctx.lineTo(tx, ty); ctx.stroke();
+      ctx.setLineDash([]);
+
+      const lines = [
+        `[${b.getType().toUpperCase()}] ${b.name}`,
+        `M:${b.mass.toFixed(0)}  V:${b.speed.toFixed(1)}`,
+        `(${b.x.toFixed(0)}, ${b.y.toFixed(0)})`,
+      ];
+      const pad = 4, lh = 13;
+      const mw = Math.max(...lines.map(l => ctx.measureText(l).width));
+      const bw = mw + pad * 2, bh = lines.length * lh + pad * 2;
+
+      ctx.fillStyle = 'rgba(5,8,20,.78)';
+      ctx.strokeStyle = `rgba(${border},.18)`;
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.roundRect(tx - 2, ty - bh, bw, bh, 4); ctx.fill(); ctx.stroke();
+
+      ctx.fillStyle = `rgba(${accent},.85)`;
+      lines.forEach((l, i) => ctx.fillText(l, tx + pad - 2, ty - bh + pad + i * lh));
+      ctx.restore();
+    }
+  }
+
+  _drawMouse(time) {
+    if (!this.mouseDown) return;
+    const ctx = this.ctx, mx = this.mouseX, my = this.mouseY;
+    const rgb = this.isAG ? '255,100,50' : '0,200,255';
+    const rot = time * .003;
+    ctx.save(); ctx.globalAlpha = .6;
+    for (let i = 0; i < 3; i++) {
+      const r = 20 + i * 18 + Math.sin(time * .005 + i) * 6;
+      ctx.beginPath();
+      ctx.arc(mx, my, r, rot + i * .5, rot + i * .5 + Math.PI * 1.3);
+      ctx.strokeStyle = `rgba(${rgb},${.3 - i * .08})`;
+      ctx.lineWidth = 1.5; ctx.stroke();
+    }
+    const g = ctx.createRadialGradient(mx, my, 0, mx, my, 28);
+    g.addColorStop(0, `rgba(${rgb},.4)`);
+    g.addColorStop(1, `rgba(${rgb},0)`);
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(mx, my, 28, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
+  // ==========================================
+  // MAIN LOOP
+  // ==========================================
+
+  _loop(time) {
+    const dt = time - this._lt;
+    this._lt = time;
+
+    // FPS
+    this._ff++; this._ft += dt;
+    if (this._ft >= 1000) {
+      document.getElementById('s-f').textContent = this._ff;
+      this._ff = 0; this._ft = 0;
+    }
+
+    // --- Physics ---
+    if (this.running || this.stepReq) {
+      const steps = Math.max(1, Math.round(this.timeScale));
+      for (let s = 0; s < steps; s++) {
+        // 1. Custom N-body forces (Strategy Pattern)
+        this.universe.simulate();
+
+        // 2. Mouse gravity well
+        if (this.mouseDown) {
+          for (const b of this.universe.bodies) {
+            const dx = this.mouseX - b.x, dy = this.mouseY - b.y;
+            const d = Math.sqrt(dx * dx + dy * dy);
+            if (d > 15) {
+              const f = .3 / Math.max(d, 30);
+              const v = b.mBody.velocity;
+              Body.setVelocity(b.mBody, { x: v.x + (dx / d) * f, y: v.y + (dy / d) * f });
+            }
+          }
+        }
+
+        // 3. Matter.js position integration + collision
+        Engine.update(this.mEng, 16.67);
+      }
+
+      // Update trails
+      for (const b of this.universe.bodies) b.updateTrail();
+      this.stepReq = false;
+      this._stat();
+    }
+
+    // Particles always tick
+    this.particles.update();
+
+    // --- RENDER ---
+    const ctx = this.ctx, w = this.canvas.width, h = this.canvas.height;
+
+    // Background
+    ctx.fillStyle = this.isAG ? '#0d0508' : '#06060f';
+    ctx.fillRect(0, 0, w, h);
+    if (this.isAG) { ctx.fillStyle = 'rgba(255,40,20,.012)'; ctx.fillRect(0, 0, w, h); }
+
+    // Stars
+    this._drawStars(time);
+
+    // Spacetime grid (warps near black holes!)
+    this._drawGrid(time);
+
+    // Trails
+    for (const b of this.universe.bodies) b.renderTrail(ctx);
+
+    // Bodies (polymorphic render)
+    for (const b of this.universe.bodies) b.render(ctx, time);
+
+    // Mouse well
+    this._drawMouse(time);
+
+    // Data HUD
+    if (this.showData) this._drawData();
+
+    // Particles
+    this.particles.render(ctx);
+
+    requestAnimationFrame(t => this._loop(t));
+  }
+}
+
+// ==========================================
+// 7. INITIALIZATION
+// ==========================================
+document.addEventListener('DOMContentLoaded', () => {
+  window.__app = new App();
+});
+</script>
+</body>
+</html>
